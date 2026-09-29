@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import { pool } from "./config/database";
+import authRoutes from "./routes/auth";
+import walletRoutes from "./routes/wallet";
 
 const app = express();
 
@@ -24,5 +26,8 @@ app.get("/health", async (_req, res) => {
         });
     }
 });
+
+app.use("/api/auth", authRoutes);
+app.use("/api/wallet", walletRoutes);
 
 export default app;
