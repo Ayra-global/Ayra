@@ -31,7 +31,7 @@ Los **montos siempre viajan como string** (por ejemplo `"100.50000000"`) para no
 | POST | `/api/auth/register` | `{ name, email, password }` | `201 { token, user }` |
 | POST | `/api/auth/login` | `{ email, password }` | `{ token, user }` |
 | GET 🔒 | `/api/auth/me` | | `{ user }` |
-   | PATCH 🔒 | `/api/auth/me` | `{ name?, preferredCurrency? }` | `{ user }` |
+| PATCH 🔒 | `/api/auth/me` | `{ name?, preferredCurrency? }` | `{ user }` |
 
 `user = { id, name, email, preferredCurrency, createdAt }`. Al registrarse, el usuario recibe 1000 USD ficticios.
 
