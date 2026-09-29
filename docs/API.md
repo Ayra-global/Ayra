@@ -1,184 +1,86 @@
-# API de AYRA
+# Contrato de la API
 
-Contrato entre el frontend (`frontend/src/lib/api.ts`) y el backend (`backend/`).
-Este documento es un borrador deducido del cliente del frontend. Los campos de las
-respuestas marcados como **por confirmar** dependen de `frontend/src/lib/types.ts`.
+Base URL: `http://localhost:3000` (local) · `https://<api>.up.railway.app` (prod)
 
-## Convenciones
+Las rutas marcadas con 🔒 requieren el header `Authorization: Bearer <token>`.
 
-- **Base URL:** variable `VITE_API_URL` en el frontend (en local: `http://localhost:3000`). Sin `/` al final.
-- **Formato:** todo es JSON. Cabecera `Content-Type: application/json`.
-- **Autenticación:** cabecera `Authorization: Bearer <token>` en todo, excepto `register`, `login` y `/health`.
-- **Montos:** siempre como **string** decimal (ejemplo `"100.50"`) para no perder precisión.
-- **Monedas:** código de 3 letras (`USD`, `COP`, `EUR`).
-- **204:** respuesta sin cuerpo.
-
-### Formato de error
-
-Toda respuesta con error (status 4xx o 5xx) debe venir así:
-
+Todos los errores tienen el mismo formato:
 ```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Datos inválidos",
-    "details": { "email": ["Correo inválido"] }
-  }
-}
+{ "error": { "code": "INSUFFICIENT_FUNDS", "message": "Saldo insuficiente en USD", "details": { } } }
 ```
 
-- `code` y `message` son obligatorios. `details` es opcional y sirve para errores por campo.
-- Un **401** hace que el frontend cierre la sesión automáticamente. Devolver 401 solo cuando el token falte, sea inválido o haya vencido.
-
-## Prioridad para la Demo 1
-
-La meta del Sprint 1 es que un usuario se registre, entre y vea 1.000 USD. Para eso bastan
-los endpoints marcados como **Sprint 1**. El resto puede venir después.
-
-| Endpoint | Prioridad |
+| Status | Códigos |
 |---|---|
-| `GET /health` | Sprint 1 |
-| `POST /api/auth/register` | Sprint 1 |
-| `POST /api/auth/login` | Sprint 1 |
-| `GET /api/auth/me` | Sprint 1 |
-| `GET /api/wallet` | Sprint 1 |
-| `GET /api/wallet/balances` | Sprint 1 |
-| `PATCH /api/auth/me` | Sprint 1 (N8) |
-| Tasas, transacciones, contextos, asistente | Después |
+| 400 | `VALIDATION_ERROR` (details = errores por campo), `UNSUPPORTED_CURRENCY`, `INVALID_JSON` |
+| 401 | `UNAUTHORIZED`, `INVALID_CREDENTIALS` |
+| 404 | `NOT_FOUND`, `ROUTE_NOT_FOUND` |
+| 409 | `EMAIL_TAKEN`, `CONFLICT` |
+| 422 | `INSUFFICIENT_FUNDS`, `INVALID_AMOUNT`, `CONTEXT_ARCHIVED` |
+| 502/503 | `RATES_UNAVAILABLE`, `ASSISTANT_DISABLED`, `ASSISTANT_ERROR` |
 
-Al registrarse, el backend debe crear la billetera del usuario con un saldo inicial de 1.000 USD.
+Los **montos siempre viajan como string** (por ejemplo `"100.50000000"`) para no perder precisión.
 
-## Salud
+---
 
-### `GET /health`
+## Health
+`GET /health` → `{ "status": "ok", "db": "ok" }`
 
-Sin autenticación. Respuesta `200`:
+## Auth
+| Método | Ruta | Body | Respuesta |
+|---|---|---|---|
+| POST | `/api/auth/register` | `{ name, email, password }` | `201 { token, user }` |
+| POST | `/api/auth/login` | `{ email, password }` | `{ token, user }` |
+| GET 🔒 | `/api/auth/me` | | `{ user }` |
+   | PATCH 🔒 | `/api/auth/me` | `{ name?, preferredCurrency? }` | `{ user }` |
 
-```json
-{ "status": "ok", "db": "ok" }
-```
+`user = { id, name, email, preferredCurrency, createdAt }`. Al registrarse, el usuario recibe 1000 USD ficticios.
 
-## Autenticación
+## Wallet
+| Método | Ruta | Respuesta |
+|---|---|---|
+| GET 🔒 | `/api/wallet` | `{ balances: [{ currency, amount }], total: { currency: "USD", amount } }` |
+| GET 🔒 | `/api/wallet/balances` | `{ balances }` |
 
-### `POST /api/auth/register`
+## Tasas
+| Método | Ruta | Respuesta |
+|---|---|---|
+| GET | `/api/rates/currencies` | `{ currencies: ["USD","EUR","ARS"] }` |
+| GET 🔒 | `/api/rates?base=USD` | `{ base, rates: [{ target, rate, fetchedAt, source, stale }] }` |
+| GET 🔒 | `/api/rates/quote?type=buy&from=USD&to=EUR&amount=100` | `{ quote }` (no modifica saldos) |
 
-Body:
+`quote = { type, fromCurrency, toCurrency, fromAmount, toAmount, midRate, appliedRate, fee, feeSide, rateFetchedAt, rateStale }`
 
-```json
-{ "name": "Ana Pérez", "email": "ana@correo.com", "password": "mínimo 8 caracteres" }
-```
+## Transacciones
+| Método | Ruta | Body / Query | Respuesta |
+|---|---|---|---|
+| POST 🔒 | `/api/transactions` | `{ type, fromCurrency, toCurrency, amount, contextId? }` | `201 { transaction }` |
+| GET 🔒 | `/api/transactions` | `?contextId=&limit=20&offset=0` | `{ items, total, limit, offset }` |
 
-Respuesta `201`: `{ "token": "<jwt>", "user": User }`
+Semántica de `type` y de `amount`:
+| type | `amount` es… | Spread |
+|---|---|---|
+| `exchange` | lo que **sale** de `fromCurrency` | No, se usa la tasa media |
+| `sell` | lo que **vendés** de `fromCurrency` | Sí, recibís menos |
+| `buy` | lo que **querés recibir** de `toCurrency` | Sí, pagás más |
 
-Errores: `400` validación, `409` correo ya registrado.
+`transaction = { id, type, fromCurrency, toCurrency, fromAmount, toAmount, rate, midRate, fee, feeCurrency, contextId, contextName, createdAt }`
 
-### `POST /api/auth/login`
+## Contextos
+| Método | Ruta | Body | Respuesta |
+|---|---|---|---|
+| GET 🔒 | `/api/contexts?includeArchived=true` | | `{ contexts }` |
+| POST 🔒 | `/api/contexts` | `{ name, type, startDate?, endDate?, budget?: { currency, amount } }` | `201 { context }` |
+| GET 🔒 | `/api/contexts/:id` | | `{ context }` |
+| PATCH 🔒 | `/api/contexts/:id/archive` | | `{ context }` |
+| PATCH 🔒 | `/api/contexts/:id/activate` | | `{ context }` |
 
-Body: `{ "email": "...", "password": "..." }`
+`type` puede ser `travel`, `study`, `work` o `shared`.
+`context = { id, name, type, status, startDate, endDate, budget: { currency, amount, spent } | null, transactionCount, createdAt }`
 
-Respuesta `200`: `{ "token": "<jwt>", "user": User }`
+## Asistente
+| Método | Ruta | Body | Respuesta |
+|---|---|---|---|
+| POST 🔒 | `/api/assistant/chat` | `{ message, history?: [{ role: "user"\|"assistant", text }] }` | `{ reply }` |
 
-Errores: `401` credenciales incorrectas.
-
-### `GET /api/auth/me`
-
-Respuesta `200`: `{ "user": User }`
-
-### `PATCH /api/auth/me`
-
-Todavía no lo usa el frontend (tarea N8 de Nati). Edita nombre y moneda preferida.
-
-Body (todos opcionales): `{ "name": "...", "preferredCurrency": "COP" }`
-
-Respuesta `200`: `{ "user": User }`
-
-El nombre exacto del campo de moneda hay que acordarlo con Webster (**por confirmar**).
-
-## Billetera
-
-### `GET /api/wallet`
-
-Resumen de la billetera. Respuesta `200`: `WalletSummary` (**por confirmar** la forma exacta en `types.ts`).
-
-### `GET /api/wallet/balances`
-
-Respuesta `200`: `{ "balances": Balance[] }`
-
-### `GET /api/rates/currencies`
-
-Monedas disponibles. Respuesta `200`: `{ "currencies": ["USD", "COP", "EUR"] }`
-
-## Tasas y operaciones (después del Sprint 1)
-
-`type` es un `OperationType` (compra, venta o intercambio). Los valores exactos están en
-`types.ts` y la interpretación de cada uno es la duda N7 para el mentor.
-
-### `GET /api/rates/quote`
-
-Query: `type`, `from`, `to`, `amount`. Respuesta `200`: `{ "quote": Quote }`
-
-### `POST /api/transactions`
-
-Ejecuta una operación. Body:
-
-```json
-{
-  "type": "OperationType",
-  "fromCurrency": "USD",
-  "toCurrency": "COP",
-  "amount": "100.00",
-  "contextId": null
-}
-```
-
-Respuesta `201`: `{ "transaction": Transaction }`
-
-Errores: `400` validación, `422` saldo insuficiente (**por confirmar** el código).
-
-### `GET /api/transactions`
-
-Query opcional: `contextId`, `limit`, `offset`. Respuesta `200`: `{ "items": Transaction[], "total": number }`
-
-## Contextos (después del Sprint 1)
-
-Un contexto agrupa movimientos por viaje o período, con presupuesto opcional.
-
-### `GET /api/contexts`
-
-Query opcional: `includeArchived=true`. Respuesta `200`: `{ "contexts": WalletContext[] }`
-
-### `POST /api/contexts`
-
-Body:
-
-```json
-{
-  "name": "Viaje a Madrid",
-  "type": "WalletContext['type']",
-  "startDate": "2026-10-01",
-  "endDate": "2026-10-15",
-  "budget": { "currency": "EUR", "amount": "500.00" }
-}
-```
-
-`startDate`, `endDate` y `budget` son opcionales (pueden ser `null`). Respuesta `201`: `{ "context": WalletContext }`
-
-### `PATCH /api/contexts/:id/archive`
-
-Sin body. Respuesta `200`: `{ "context": WalletContext }`
-
-## Asistente (después del Sprint 1)
-
-### `POST /api/assistant/chat`
-
-Body: `{ "message": "...", "history": ChatMessage[] }`
-
-Respuesta `200`: `{ "reply": "..." }`
-
-Requiere un proveedor de IA. Fuera del alcance del Sprint 1.
-
-## Pendientes de este documento
-
-- Completar `User`, `Balance`, `WalletSummary`, `Quote`, `Transaction` y `WalletContext` con `frontend/src/lib/types.ts`.
-- Confirmar los valores de `OperationType` y los códigos de error de negocio.
-- Acordar con Webster el nombre del campo de moneda preferida.
+## Vercel Function (interna)
+`POST https://<app>.vercel.app/api/send-email`. Requiere el header `x-internal-secret`. Solo la llama el backend.
