@@ -1,4 +1,4 @@
-# AYRA Global Student
+# AYRA Global 
 
 Billetera digital multimoneda para estudiantes que viajan: saldos en varias monedas y conversión de divisas.
 
@@ -8,8 +8,8 @@ Billetera digital multimoneda para estudiantes que viajan: saldos en varias mone
 - Base de datos: PostgreSQL (Railway)
 
 ## URLs
-- Frontend: _pendiente_
-- Backend: _pendiente_
+- Frontend: https://ayra-woad.vercel.app
+- Backend: https://ayra-production.up.railway.app (salud: /health)
 
 ## Cómo correrlo en local
 Backend:
@@ -26,8 +26,8 @@ Frontend:
 ## Equipo
 | Nombre | Rol |
 |---|---|
-| Natalia | Backend |
-| Webster | Frontend |
-| José | Integración y coordinación |
+| Natalia (Nataliamicaela) | Backend |
+| Webster (WebsterFever) | Frontend |
+| Jose (lHakoo)| Integración y coordinación |
 
-Ver [CONTRIBUTING.md](CONTRIBUTING.md) para la forma de trabajo. Las URLs reales se completan el miércoles (J6).
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para la forma de trabajo.
