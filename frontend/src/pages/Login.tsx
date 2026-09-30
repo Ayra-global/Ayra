@@ -2,6 +2,17 @@ import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../lib/api';
+import { Logo } from '../components/Logo';
+import { IconContexts, IconExchange, IconGlobe, IconShield, IconSparkles, IconUsers } from '../components/Icons';
+
+const FEATURES = [
+  { icon: IconGlobe, label: 'Múltiples monedas' },
+  { icon: IconContexts, label: 'Contextos personalizables' },
+  { icon: IconExchange, label: 'Conversión en tiempo real' },
+  { icon: IconUsers, label: 'Proyectos compartidos' },
+  { icon: IconSparkles, label: 'Asistente con IA' },
+  { icon: IconShield, label: 'Seguridad avanzada' },
+];
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -49,12 +60,21 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
   return (
     <div className="auth-screen">
       <section className="auth-hero">
-        <div className="brand big">
-          <span className="brand-mark">AYRA</span>
-          <span className="brand-sub">CONTEXTUAL WALLET</span>
-        </div>
+        <Logo size={84} tone="light" tagline />
         <h1>Tu dinero se adapta <span className="grad">a tu vida</span></h1>
-        <p>Una billetera. Todos tus mundos. Viajes, estudios, trabajo y proyectos compartidos en un solo lugar.</p>
+        <p>
+          AYRA es una billetera digital multi-moneda para gestionar tu dinero según tu contexto de vida:
+          viajes, estudios, trabajo o proyectos compartidos. Todo en un solo lugar, simple y seguro.
+        </p>
+        <ul className="feature-grid">
+          {FEATURES.map(({ icon: Icon, label }) => (
+            <li key={label}>
+              <span className="feature-icon"><Icon /></span>
+              {label}
+            </li>
+          ))}
+        </ul>
+        <p className="handwritten">Same money. Bigger dreams ♡</p>
       </section>
       <section className="auth-card card">
         <h2>{title}</h2>

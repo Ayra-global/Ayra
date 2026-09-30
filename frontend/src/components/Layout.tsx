@@ -1,15 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Logo } from './Logo';
 
 export function Layout() {
   const { user, logout } = useAuth();
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">AYRA</span>
-          <span className="brand-sub">CONTEXTUAL WALLET</span>
-        </div>
+        <NavLink to="/" className="brand-link" aria-label="Inicio AYRA">
+          <Logo size={30} subtitle={false} />
+        </NavLink>
         <nav className="nav">
           <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/contexts">Contextos</NavLink>

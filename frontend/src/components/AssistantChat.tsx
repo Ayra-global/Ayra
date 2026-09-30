@@ -4,8 +4,17 @@ import type { ChatMessage } from '../lib/types';
 
 const SUGGESTIONS = ['¿Cuánto tengo en total?', '¿Cuánto gasté en mi viaje?', '¿Qué diferencia hay entre vender e intercambiar?'];
 
+/** Cualquier componente puede abrir el chat con: window.dispatchEvent(new Event(OPEN_ASSISTANT_EVENT)) */
+export const OPEN_ASSISTANT_EVENT = 'ayra:open-assistant';
+
 export function AssistantChat() {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, openChat);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, openChat);
+  }, []);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'assistant', text: '¡Hola! Soy AYRA AI 👋 ¿En qué puedo ayudarte hoy?' },
   ]);

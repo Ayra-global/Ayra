@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AssistantBanner } from '../components/AssistantBanner';
 import { AssistantChat } from '../components/AssistantChat';
 import { BalanceCards } from '../components/BalanceCards';
 import { OperationForm } from '../components/OperationForm';
@@ -39,6 +40,7 @@ export function DashboardPage() {
       {error && <p className="alert error">{error}</p>}
 
       <BalanceCards summary={summary} />
+      <AssistantBanner />
 
       <div className="grid-2">
         {summary && <OperationForm balances={summary.balances} contexts={contexts} onDone={load} />}
