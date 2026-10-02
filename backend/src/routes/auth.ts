@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Request, Router } from "express";
 import { pool } from "../config/database";
 import {
     comparePassword,
@@ -16,6 +16,22 @@ import {
 } from "../middlewares/auth";
 
 const router = Router();
+
+const AUTH_COOKIE = "ayra_token";
+
+function getAuthCookieOptions(req: Request) {
+    const isLocalhost =
+        req.hostname === "localhost" ||
+        req.hostname === "127.0.0.1";
+
+    return {
+        httpOnly: true,
+        secure: !isLocalhost,
+        sameSite: isLocalhost ? "lax" as const : "none" as const,
+        maxAge: 24 * 60 * 60 * 1000,
+        path: "/",
+    };
+}
 
 function mapUser(row: {
     id: string;
@@ -105,7 +121,10 @@ router.post("/register", async (req, res) => {
                 currency_code,
                 amount
             )
-            VALUES ($1, 'USD', 1000)
+            VALUES
+                ($1, 'USD', 1000),
+                ($1, 'EUR', 0),
+                ($1, 'ARS', 0)
             `,
             [wallet.id]
         );
@@ -114,6 +133,13 @@ router.post("/register", async (req, res) => {
 
         const token = generateToken(user.id);
 
+        res.cookie(
+            AUTH_COOKIE,
+            token,
+            getAuthCookieOptions(req)
+        );
+
+        // Temporal: mantenemos el token en la respuesta mientras el frontend migra a cookies.
         return res.status(201).json({
             token,
             user: mapUser(user),
@@ -195,6 +221,13 @@ router.post("/login", async (req, res) => {
 
         const token = generateToken(user.id);
 
+        res.cookie(
+            AUTH_COOKIE,
+            token,
+            getAuthCookieOptions(req)
+        );
+
+        // Temporal: mantenemos el token en la respuesta mientras el frontend migra a cookies.
         return res.json({
             token,
             user: mapUser(user),
@@ -325,5 +358,16 @@ router.patch(
         }
     }
 );
+
+router.post("/logout", (req, res) => {
+    res.clearCookie(
+        AUTH_COOKIE,
+        getAuthCookieOptions(req)
+    );
+
+    return res.json({
+        message: "Sesión cerrada correctamente",
+    });
+});
 
 export default router;

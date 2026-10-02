@@ -1,12 +1,20 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { pool } from "./config/database";
 import authRoutes from "./routes/auth";
 import walletRoutes from "./routes/wallet";
 
 const app = express();
 
-app.use(cors());
+app.use(
+    cors({
+        origin: process.env.CORS_ORIGIN,
+        credentials: true,
+    })
+);
+
+app.use(cookieParser());
 app.use(express.json());
 
 app.get("/health", async (_req, res) => {
