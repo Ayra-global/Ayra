@@ -1,7 +1,7 @@
 # Guía de contribución
 
 ## Ramas
-- `main`: producción, integración. Todos los PR apuntan aquí.
+- `main`: producción e integración. No se hace push directo. Todos los PR apuntan aquí.
 - Ramas de trabajo desde `main`: `feature/nombre`, `fix/nombre`, `chore/nombre`.
 
 ## Commits
