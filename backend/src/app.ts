@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import { pool } from "./config/database";
 import authRoutes from "./routes/auth";
 import walletRoutes from "./routes/wallet";
+import ratesRoutes from "./routes/rates";
 
 const app = express();
 
@@ -37,5 +38,6 @@ app.get("/health", async (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/rates", ratesRoutes);
 
 export default app;
