@@ -8,9 +8,16 @@ import ratesRoutes from "./routes/rates";
 
 const app = express();
 
+const corsOrigins = (
+    process.env.CORS_ORIGIN ?? "http://localhost:5173"
+)
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN,
+        origin: corsOrigins,
         credentials: true,
     })
 );
