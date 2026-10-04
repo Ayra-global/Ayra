@@ -10,9 +10,17 @@ export function requireAuth(
     res: Response,
     next: NextFunction
 ) {
+    const cookieToken = req.cookies?.ayra_token;
+
     const authorization = req.header("Authorization");
 
-    if (!authorization?.startsWith("Bearer ")) {
+    const bearerToken = authorization?.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length).trim()
+        : undefined;
+
+    const token = cookieToken ?? bearerToken;
+
+    if (!token) {
         return res.status(401).json({
             error: {
                 code: "UNAUTHORIZED",
@@ -21,8 +29,6 @@ export function requireAuth(
             },
         });
     }
-
-    const token = authorization.slice("Bearer ".length).trim();
 
     try {
         const { userId } = verifyToken(token);
