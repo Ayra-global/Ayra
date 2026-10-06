@@ -3,9 +3,10 @@ import { pool } from "../config/database";
 const CACHE_TTL_MINUTES = 60;
 const CACHE_SOURCE = "exchangerate-api";
 
-const SUPPORTED_CURRENCIES = ["USD", "EUR", "ARS"] as const;
+export const SUPPORTED_CURRENCIES = ["USD", "EUR", "ARS"] as const;
 
-type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+export type SupportedCurrency =
+    (typeof SUPPORTED_CURRENCIES)[number];
 
 interface ExchangeRateApiResponse {
     result: string;
@@ -33,7 +34,7 @@ export interface RatesResponse {
     rates: RateItem[];
 }
 
-function isSupportedCurrency(
+export function isSupportedCurrency(
     currency: string
 ): currency is SupportedCurrency {
     return SUPPORTED_CURRENCIES.includes(
