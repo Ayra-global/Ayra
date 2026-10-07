@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { flag, money } from '../lib/format';
+import { money } from '../lib/format';
+import { Flag } from './Flag';
 import type { WalletSummary } from '../lib/types';
 import { IconEye, IconEyeOff } from './Icons';
 
@@ -37,7 +38,7 @@ export function BalanceCards({ summary }: { summary: WalletSummary | null }) {
       <div className="balance-grid">
         {summary.balances.map((b) => (
           <div key={b.currency} className="balance-chip">
-            <span className="flag">{flag(b.currency)}</span>
+            <span className="flag"><Flag currency={b.currency} /></span>
             <span className="cur">{b.currency}</span>
             <span className="amt">{show(money(b.amount))}</span>
           </div>
