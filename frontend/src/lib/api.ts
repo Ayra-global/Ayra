@@ -32,18 +32,58 @@ export class ApiError extends Error {
 /** Se dispara cuando el backend responde 401 → el AuthContext cierra sesión. */
 export const UNAUTHORIZED_EVENT = 'ayra:unauthorized';
 
+/** Se disparan cuando el backend deja de responder / vuelve a responder → <BackendStatus /> muestra el aviso. */
+export const BACKEND_DOWN_EVENT = 'ayra:backend-down';
+export const BACKEND_UP_EVENT = 'ayra:backend-up';
+
+const NETWORK_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intentá de nuevo en unos segundos.';
+
+let backendDown = false;
+function markBackend(up: boolean) {
+  if (up === !backendDown) return; // sin cambios
+  backendDown = !up;
+  window.dispatchEvent(new Event(up ? BACKEND_UP_EVENT : BACKEND_DOWN_EVENT));
+}
+
+/** Ping a /health. Devuelve true si el backend y la base de datos responden. */
+export async function checkHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(5000) });
+    const ok = res.ok;
+    markBackend(ok);
+    return ok;
+  } catch {
+    markBackend(false);
+    return false;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = tokenStore.get();
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    // Sin respuesta: backend caído, sin internet o CORS bloqueado
+    markBackend(false);
+    throw new ApiError(0, 'NETWORK_ERROR', NETWORK_ERROR_MESSAGE);
+  }
 
   const body = res.status === 204 ? null : await res.json().catch(() => null);
+
+  // 502/503/504 sin JSON = el servidor no está levantado (respuesta del proxy de Railway)
+  if ([502, 503, 504].includes(res.status) && !body) {
+    markBackend(false);
+    throw new ApiError(res.status, 'NETWORK_ERROR', NETWORK_ERROR_MESSAGE);
+  }
+  markBackend(true);
 
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));

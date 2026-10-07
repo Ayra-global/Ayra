@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, tokenStore, UNAUTHORIZED_EVENT } from '../lib/api';
+import { api, ApiError, tokenStore, UNAUTHORIZED_EVENT } from '../lib/api';
 import type { User } from '../lib/types';
 
 interface AuthState {
@@ -30,7 +30,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .me()
       .then(({ user }) => setUser(user))
-      .catch(() => tokenStore.clear())
+      // Solo cerramos sesión si el token es inválido (401). Si el backend está caído,
+      // conservamos el token para que el usuario siga logueado cuando vuelva.
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) tokenStore.clear();
+      })
       .finally(() => setLoading(false));
   }, []);
 
