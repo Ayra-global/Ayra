@@ -31,9 +31,11 @@ export function ContextsPage() {
   const [txs, setTxs] = useState<Transaction[] | null>(null);
 
   const load = useCallback(async () => {
-    const [c, cur] = await Promise.all([api.contexts(), api.currencies()]);
-    setContexts(c.contexts);
-    setCurrencies(cur.currencies);
+    // Cada pedido por separado: si uno falla, el otro igual se muestra
+    const [c, cur] = await Promise.allSettled([api.contexts(), api.currencies()]);
+    if (c.status === 'fulfilled') setContexts(c.value.contexts);
+    else setContexts([]);
+    if (cur.status === 'fulfilled') setCurrencies(cur.value.currencies);
   }, []);
 
   useEffect(() => {
@@ -43,7 +45,10 @@ export function ContextsPage() {
   useEffect(() => {
     if (!selected) return;
     setTxs(null);
-    api.transactions({ contextId: selected.id, limit: 50 }).then((r) => setTxs(r.items));
+    api
+      .transactions({ contextId: selected.id, limit: 50 })
+      .then((r) => setTxs(r.items))
+      .catch(() => setTxs([]));
   }, [selected]);
 
   async function archive(id: string) {
