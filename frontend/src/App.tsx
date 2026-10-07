@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BackendStatus } from './components/BackendStatus';
 import { Layout } from './components/Layout';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <BackendStatus />
         <Routes>
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<LoginPage />} />

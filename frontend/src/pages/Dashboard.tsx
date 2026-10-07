@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AssistantBanner } from '../components/AssistantBanner';
 import { AssistantChat } from '../components/AssistantChat';
 import { BalanceCards } from '../components/BalanceCards';
 import { OperationForm } from '../components/OperationForm';
@@ -17,15 +18,16 @@ export function DashboardPage() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    try {
-      const [w, t, c] = await Promise.all([api.wallet(), api.transactions({ limit: 6 }), api.contexts()]);
-      setSummary(w);
-      setTxs(t.items);
-      setContexts(c.contexts);
+    // allSettled: si falla un endpoint (p. ej. aún no implementado), el resto se muestra igual.
+    const [w, t, c] = await Promise.allSettled([api.wallet(), api.transactions({ limit: 6 }), api.contexts()]);
+    if (w.status === 'fulfilled') {
+      setSummary(w.value);
       setError('');
-    } catch {
+    } else {
       setError('No se pudieron cargar los datos. ¿Está corriendo el backend?');
     }
+    setTxs(t.status === 'fulfilled' ? t.value.items : []);
+    setContexts(c.status === 'fulfilled' ? c.value.contexts : []);
   }, []);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function DashboardPage() {
       {error && <p className="alert error">{error}</p>}
 
       <BalanceCards summary={summary} />
+      <AssistantBanner />
 
       <div className="grid-2">
         {summary && <OperationForm balances={summary.balances} contexts={contexts} onDone={load} />}

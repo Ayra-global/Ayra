@@ -1,9 +1,9 @@
 name: CI
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
 
 jobs:
   backend:
@@ -20,6 +20,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run lint --if-present
+      - run: npm test
       - run: npm run build
 
   frontend:
