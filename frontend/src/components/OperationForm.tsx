@@ -61,8 +61,8 @@ export function OperationForm({ balances, contexts, onDone }: Props) {
     setSubmitting(true);
     setMessage(null);
     try {
-      const { transaction } = await api.execute({ type, fromCurrency: from, toCurrency: to, amount, contextId: contextId || null });
-      setMessage({ kind: 'ok', text: `✅ Operación confirmada: +${money(transaction.toAmount, transaction.toCurrency)}. Te enviamos un email.` });
+      const { transaction } = await api.execute({ type, fromCurrency: from, toCurrency: to, amount, contextId: contextId || undefined });
+      setMessage({ kind: 'ok', text: `✅ Operación confirmada: +${money(transaction.toAmount, transaction.toCurrency)}.` });
       setAmount('');
       onDone();
     } catch (err) {
