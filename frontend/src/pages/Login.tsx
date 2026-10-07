@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ApiError } from '../lib/api';
+import { ApiError, consumeSessionExpired, SESSION_EXPIRED_MESSAGE } from '../lib/api';
 import { Logo } from '../components/Logo';
 import { IconContexts, IconExchange, IconGlobe, IconShield, IconSparkles, IconUsers } from '../components/Icons';
 
@@ -22,6 +22,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [expired] = useState(consumeSessionExpired);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -39,6 +40,7 @@ export function LoginPage() {
 
   return (
     <AuthShell title="Bienvenido de nuevo" subtitle="Ingresá a tu wallet">
+      {expired && !error && <p className="alert warn">{SESSION_EXPIRED_MESSAGE}</p>}
       <form onSubmit={onSubmit} className="form">
         <label>
           Email
