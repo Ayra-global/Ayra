@@ -5,6 +5,7 @@ import {
     type QuoteType,
 } from "./quote";
 import type { TransactionInput } from "../schemas/transactions";
+import { sendTransactionEmail } from "./email";
 
 export interface TransactionResponse {
     id: string;
@@ -173,6 +174,8 @@ export async function createTransaction(
     });
 
     const client = await pool.connect();
+    let committed = false;
+    let createdTransaction: TransactionResponse;
 
     try {
         await client.query("BEGIN");
@@ -183,11 +186,11 @@ export async function createTransaction(
             const contextResult =
                 await client.query<ContextRow>(
                     `
-                    SELECT id, name
-                    FROM contexts
-                    WHERE id = $1
-                      AND wallet_id = $2
-                    `,
+                SELECT id, name
+                FROM contexts
+                WHERE id = $1
+                  AND wallet_id = $2
+                `,
                     [input.contextId, walletId]
                 );
 
@@ -204,16 +207,16 @@ export async function createTransaction(
         const balancesResult =
             await client.query<BalanceRow>(
                 `
-                SELECT
-                    id,
-                    currency_code,
-                    amount
-                FROM balances
-                WHERE wallet_id = $1
-                  AND currency_code IN ($2, $3)
-                ORDER BY currency_code
-                FOR UPDATE
-                `,
+            SELECT
+                id,
+                currency_code,
+                amount
+            FROM balances
+            WHERE wallet_id = $1
+              AND currency_code IN ($2, $3)
+            ORDER BY currency_code
+            FOR UPDATE
+            `,
                 [
                     walletId,
                     quote.fromCurrency,
@@ -221,9 +224,7 @@ export async function createTransaction(
                 ]
             );
 
-        if (
-            balancesResult.rows.length !== 2
-        ) {
+        if (balancesResult.rows.length !== 2) {
             throw new TransactionError(
                 "BALANCE_NOT_FOUND",
                 "No se encontraron los balances necesarios para realizar la operación"
@@ -304,12 +305,12 @@ export async function createTransaction(
 
         await client.query(
             `
-            UPDATE balances
-            SET
-                amount = amount - $1,
-                updated_at = NOW()
-            WHERE id = $2
-            `,
+        UPDATE balances
+        SET
+            amount = amount - $1,
+            updated_at = NOW()
+        WHERE id = $2
+        `,
             [
                 quote.fromAmount,
                 fromBalance.id,
@@ -318,12 +319,12 @@ export async function createTransaction(
 
         await client.query(
             `
-            UPDATE balances
-            SET
-                amount = amount + $1,
-                updated_at = NOW()
-            WHERE id = $2
-            `,
+        UPDATE balances
+        SET
+            amount = amount + $1,
+            updated_at = NOW()
+        WHERE id = $2
+        `,
             [
                 quote.toAmount,
                 toBalance.id,
@@ -336,36 +337,36 @@ export async function createTransaction(
         const transactionResult =
             await client.query<InsertedTransactionRow>(
                 `
-                INSERT INTO transactions (
-                    wallet_id,
-                    context_id,
-                    type,
-                    currency_from,
-                    currency_to,
-                    amount_from,
-                    amount_to,
-                    rate_used,
-                    mid_rate,
-                    fee,
-                    fee_currency,
-                    status
-                )
-                VALUES (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6,
-                    $7,
-                    $8,
-                    $9,
-                    $10,
-                    $11,
-                    'completed'
-                )
-                RETURNING id
-                `,
+            INSERT INTO transactions (
+                wallet_id,
+                context_id,
+                type,
+                currency_from,
+                currency_to,
+                amount_from,
+                amount_to,
+                rate_used,
+                mid_rate,
+                fee,
+                fee_currency,
+                status
+            )
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9,
+                $10,
+                $11,
+                'completed'
+            )
+            RETURNING id
+            `,
                 [
                     walletId,
                     input.contextId ?? null,
@@ -392,16 +393,27 @@ export async function createTransaction(
         }
 
         await client.query("COMMIT");
+        committed = true;
 
-        return await getTransactionById(
+        createdTransaction = await getTransactionById(
             client,
             inserted.id,
             walletId
         );
     } catch (error) {
-        await client.query("ROLLBACK");
+        if (!committed) {
+            await client.query("ROLLBACK");
+        }
+
         throw error;
     } finally {
         client.release();
     }
+
+    await sendTransactionEmail(
+        userId,
+        createdTransaction
+    );
+
+    return createdTransaction;
 }
