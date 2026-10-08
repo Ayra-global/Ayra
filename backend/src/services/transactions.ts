@@ -4,7 +4,10 @@ import {
     type QuoteResponse,
     type QuoteType,
 } from "./quote";
-import type { TransactionInput } from "../schemas/transactions";
+import type {
+    TransactionHistoryQuery,
+    TransactionInput,
+} from "../schemas/transactions";
 import { sendTransactionEmail } from "./email";
 
 export interface TransactionResponse {
@@ -21,6 +24,13 @@ export interface TransactionResponse {
     contextId: string | null;
     contextName: string | null;
     createdAt: Date;
+}
+
+export interface TransactionHistoryResponse {
+    items: TransactionResponse[];
+    total: number;
+    limit: number;
+    offset: number;
 }
 
 interface WalletRow {
@@ -42,7 +52,7 @@ interface InsertedTransactionRow {
     id: string;
 }
 
-class TransactionError extends Error {
+export class TransactionError extends Error {
     constructor(
         public code: string,
         message: string
@@ -186,11 +196,11 @@ export async function createTransaction(
             const contextResult =
                 await client.query<ContextRow>(
                     `
-                SELECT id, name
-                FROM contexts
-                WHERE id = $1
-                  AND wallet_id = $2
-                `,
+                    SELECT id, name
+                    FROM contexts
+                    WHERE id = $1
+                      AND wallet_id = $2
+                    `,
                     [input.contextId, walletId]
                 );
 
@@ -207,16 +217,16 @@ export async function createTransaction(
         const balancesResult =
             await client.query<BalanceRow>(
                 `
-            SELECT
-                id,
-                currency_code,
-                amount
-            FROM balances
-            WHERE wallet_id = $1
-              AND currency_code IN ($2, $3)
-            ORDER BY currency_code
-            FOR UPDATE
-            `,
+                SELECT
+                    id,
+                    currency_code,
+                    amount
+                FROM balances
+                WHERE wallet_id = $1
+                  AND currency_code IN ($2, $3)
+                ORDER BY currency_code
+                FOR UPDATE
+                `,
                 [
                     walletId,
                     quote.fromCurrency,
@@ -224,7 +234,9 @@ export async function createTransaction(
                 ]
             );
 
-        if (balancesResult.rows.length !== 2) {
+        if (
+            balancesResult.rows.length !== 2
+        ) {
             throw new TransactionError(
                 "BALANCE_NOT_FOUND",
                 "No se encontraron los balances necesarios para realizar la operación"
@@ -305,12 +317,12 @@ export async function createTransaction(
 
         await client.query(
             `
-        UPDATE balances
-        SET
-            amount = amount - $1,
-            updated_at = NOW()
-        WHERE id = $2
-        `,
+            UPDATE balances
+            SET
+                amount = amount - $1,
+                updated_at = NOW()
+            WHERE id = $2
+            `,
             [
                 quote.fromAmount,
                 fromBalance.id,
@@ -319,12 +331,12 @@ export async function createTransaction(
 
         await client.query(
             `
-        UPDATE balances
-        SET
-            amount = amount + $1,
-            updated_at = NOW()
-        WHERE id = $2
-        `,
+            UPDATE balances
+            SET
+                amount = amount + $1,
+                updated_at = NOW()
+            WHERE id = $2
+            `,
             [
                 quote.toAmount,
                 toBalance.id,
@@ -337,36 +349,36 @@ export async function createTransaction(
         const transactionResult =
             await client.query<InsertedTransactionRow>(
                 `
-            INSERT INTO transactions (
-                wallet_id,
-                context_id,
-                type,
-                currency_from,
-                currency_to,
-                amount_from,
-                amount_to,
-                rate_used,
-                mid_rate,
-                fee,
-                fee_currency,
-                status
-            )
-            VALUES (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                $7,
-                $8,
-                $9,
-                $10,
-                $11,
-                'completed'
-            )
-            RETURNING id
-            `,
+                INSERT INTO transactions (
+                    wallet_id,
+                    context_id,
+                    type,
+                    currency_from,
+                    currency_to,
+                    amount_from,
+                    amount_to,
+                    rate_used,
+                    mid_rate,
+                    fee,
+                    fee_currency,
+                    status
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
+                    $9,
+                    $10,
+                    $11,
+                    'completed'
+                )
+                RETURNING id
+                `,
                 [
                     walletId,
                     input.contextId ?? null,
@@ -417,3 +429,77 @@ export async function createTransaction(
 
     return createdTransaction;
 }
+
+export async function getTransactionHistory(
+    userId: string,
+    query: Partial<TransactionHistoryQuery> = {}
+): Promise<TransactionHistoryResponse> {
+    const walletId = await getWalletId(userId);
+
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+
+    let countSql = `
+        SELECT COUNT(*)::int AS total
+        FROM transactions t
+        WHERE t.wallet_id = $1
+    `;
+    const countParams: unknown[] = [walletId];
+
+    let itemsSql = `
+        SELECT
+            t.id,
+            t.type,
+            t.currency_from AS "fromCurrency",
+            t.currency_to AS "toCurrency",
+            t.amount_from AS "fromAmount",
+            t.amount_to AS "toAmount",
+            t.rate_used AS rate,
+            t.mid_rate AS "midRate",
+            t.fee,
+            t.fee_currency AS "feeCurrency",
+            t.context_id AS "contextId",
+            c.name AS "contextName",
+            t.created_at AS "createdAt"
+        FROM transactions t
+        LEFT JOIN contexts c
+            ON c.id = t.context_id
+        WHERE t.wallet_id = $1
+    `;
+    const itemsParams: unknown[] = [walletId];
+
+    if (query.contextId) {
+        countSql += ` AND t.context_id = $2`;
+        countParams.push(query.contextId);
+
+        itemsSql += ` AND t.context_id = $2`;
+        itemsParams.push(query.contextId);
+    }
+
+    itemsSql += `
+        ORDER BY t.created_at DESC, t.id DESC
+        LIMIT $${itemsParams.length + 1} OFFSET $${itemsParams.length + 2}
+    `;
+    itemsParams.push(limit, offset);
+
+    const countResult = await pool.query<{ total: number | string }>(
+        countSql,
+        countParams
+    );
+
+    const itemsResult = await pool.query<TransactionResponse>(
+        itemsSql,
+        itemsParams
+    );
+
+    const total = countResult.rows[0] ? Number(countResult.rows[0].total) : 0;
+
+    return {
+        items: itemsResult.rows,
+        total,
+        limit,
+        offset,
+    };
+}
+
+export const getTransactions = getTransactionHistory;
