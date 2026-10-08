@@ -82,5 +82,13 @@ Semántica de `type` y de `amount`:
 |---|---|---|---|
 | POST 🔒 | `/api/assistant/chat` | `{ message, history?: [{ role: "user"\|"assistant", text }] }` | `{ reply }` |
 
+El asistente utiliza Gemini mediante `@google/genai`.
+
+**Modelo:** `gemini-3.1-flash-lite`.
+
+La especificación del Sprint 2 indicaba `gemini-2.5-flash`. Durante la implementación, la API devolvió un error `404` indicando que ese modelo no estaba disponible para nuevos usuarios del proyecto utilizado. Por este motivo se adaptó la implementación a `gemini-3.1-flash-lite`, que fue validado correctamente en pruebas end-to-end locales.
+
+El asistente recibe únicamente los saldos, los movimientos recientes y los contextos del usuario autenticado. El historial del chat se limita para controlar el consumo de tokens.
+
 ## Vercel Function (interna)
 `POST https://<app>.vercel.app/api/send-email`. Requiere el header `x-internal-secret`. Solo la llama el backend.
