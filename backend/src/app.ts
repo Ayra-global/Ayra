@@ -7,6 +7,7 @@ import walletRoutes from "./routes/wallet";
 import ratesRoutes from "./routes/rates";
 import transactionsRoutes from "./routes/transactions";
 import contextsRoutes from "./routes/contexts";
+import assistantRoutes from "./routes/assistant";
 
 const app = express();
 
@@ -50,5 +51,6 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/rates", ratesRoutes);
 app.use("/api/contexts", contextsRoutes);
 app.use("/api/transactions", transactionsRoutes);
+app.use("/api/assistant", assistantRoutes);
 
 export default app;
