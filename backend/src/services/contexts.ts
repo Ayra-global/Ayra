@@ -115,10 +115,12 @@ export async function listContexts(
             COALESCE(
                 SUM(
                     CASE
+                        WHEN t.status <> 'completed' THEN 0
+                        WHEN t.currency_from = cb.currency_code THEN t.amount_from
                         WHEN
-                            t.status = 'completed'
-                            AND t.currency_from = cb.currency_code
-                        THEN t.amount_from
+                            t.type = 'buy'
+                            AND t.currency_to = cb.currency_code
+                        THEN t.amount_to
                         ELSE 0
                     END
                 ),
@@ -185,10 +187,12 @@ export async function getContext(
             COALESCE(
                 SUM(
                     CASE
+                        WHEN t.status <> 'completed' THEN 0
+                        WHEN t.currency_from = cb.currency_code THEN t.amount_from
                         WHEN
-                            t.status = 'completed'
-                            AND t.currency_from = cb.currency_code
-                        THEN t.amount_from
+                            t.type = 'buy'
+                            AND t.currency_to = cb.currency_code
+                        THEN t.amount_to
                         ELSE 0
                     END
                 ),

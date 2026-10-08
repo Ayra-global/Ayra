@@ -16,6 +16,9 @@ vi.mock("../config/database", () => ({
 }));
 
 const mockedPoolQuery = pool.query as unknown as {
+    mock: {
+        calls: unknown[][];
+    };
     mockReset(): void;
     mockResolvedValueOnce(value: unknown): void;
 };
@@ -23,7 +26,6 @@ const mockedPoolQuery = pool.query as unknown as {
 const mockedPoolConnect = pool.connect as unknown as {
     mockResolvedValue(value: unknown): void;
 };
-
 function createMockClient() {
     return {
         query: vi.fn(),
@@ -49,6 +51,42 @@ describe("contexts service", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockedPoolQuery.mockReset();
+    });
+
+    it("calcula el gasto usando el monto destino cuando coincide con la moneda del presupuesto", async () => {
+        mockedPoolQuery.mockResolvedValueOnce({
+            rows: [{ id: "wallet-1" }],
+        });
+
+        mockedPoolQuery.mockResolvedValueOnce({
+            rows: [
+                {
+                    ...baseContextRow,
+                    budget_currency: "USD",
+                    budget_amount: "300",
+                    spent: "10",
+                    transaction_count: "1",
+                },
+            ],
+        });
+
+        const result = await listContexts("user-1");
+
+        expect(result[0].budget).toEqual({
+            currency: "USD",
+            amount: "300",
+            spent: "10",
+        });
+
+        const contextQuery = mockedPoolQuery.mock.calls[1]?.[0] as string;
+
+        expect(contextQuery).toContain(
+            "t.currency_to = cb.currency_code"
+        );
+        expect(contextQuery).toContain("THEN t.amount_to");
+        expect(contextQuery).toContain(
+            "t.type = 'buy'"
+        );
     });
 
     it("lista los contextos del usuario", async () => {
