@@ -38,6 +38,41 @@ export const BACKEND_UP_EVENT = 'ayra:backend-up';
 
 const NETWORK_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intentá de nuevo en unos segundos.';
 
+/** Monedas que soporta el backend (USD, EUR, ARS). */
+export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'ARS'];
+
+/** W4: mensajes claros para el usuario según el código de error del backend. */
+const SESSION_EXPIRED_KEY = 'ayra_session_expired';
+export const SESSION_EXPIRED_MESSAGE = 'Tu sesión venció. Volvé a ingresar para continuar.';
+
+function friendlyMessage(status: number, code: string, fallback: string): string {
+  switch (code) {
+    case 'INSUFFICIENT_BALANCE':
+      return `${fallback || 'Saldo insuficiente'}. Revisá el monto o elegí otra moneda.`;
+    case 'RATES_UNAVAILABLE':
+      return 'Las tasas de cambio no están disponibles en este momento. Probá de nuevo en unos minutos.';
+    case 'CONTEXT_NOT_FOUND':
+      return 'El contexto elegido ya no existe. Elegí otro o dejalo sin contexto.';
+    case 'VALIDATION_ERROR':
+      return fallback || 'Revisá los datos ingresados.';
+  }
+  if (status === 401) return SESSION_EXPIRED_MESSAGE;
+  if (status === 404 && !fallback) return 'Esta función todavía no está disponible.';
+  if (status >= 500) return 'Algo salió mal en el servidor. Intentá de nuevo en unos segundos.';
+  return fallback || 'Error inesperado';
+}
+
+/** Lee (y borra) la marca de "sesión vencida" para mostrar el aviso en el login. */
+export function consumeSessionExpired(): boolean {
+  try {
+    const v = sessionStorage.getItem(SESSION_EXPIRED_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+    return v === '1';
+  } catch {
+    return false;
+  }
+}
+
 let backendDown = false;
 function markBackend(up: boolean) {
   if (up === !backendDown) return; // sin cambios
@@ -86,9 +121,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   markBackend(true);
 
   if (!res.ok) {
-    if (res.status === 401 && token) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    if (res.status === 401 && token) {
+      try {
+        sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
+      } catch {
+        /* sin sessionStorage: solo se cierra la sesión */
+      }
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
     const err = body?.error ?? {};
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? 'Error inesperado', err.details);
+    const code = err.code ?? 'UNKNOWN';
+    // En login/registro el 401 es "credenciales inválidas", no sesión vencida
+    const message = token ? friendlyMessage(res.status, code, err.message ?? '') : err.message ?? 'Error inesperado';
+    throw new ApiError(res.status, code, message, err.details);
   }
   return body as T;
 }
@@ -111,13 +156,18 @@ export const api = {
   // Wallet
   wallet: () => request<WalletSummary>('/api/wallet'),
   balances: () => request<{ balances: Balance[] }>('/api/wallet/balances'),
-  currencies: () => request<{ currencies: string[] }>('/api/rates/currencies'),
+  // El backend no tiene /api/rates/currencies: usamos la lista fija de monedas soportadas
+  currencies: async () => ({ currencies: SUPPORTED_CURRENCIES }),
 
   // Tasas y operaciones
   quote: (p: { type: OperationType; from: string; to: string; amount: string }) =>
     request<{ quote: Quote }>(`/api/rates/quote?${qs(p)}`),
-  execute: (data: { type: OperationType; fromCurrency: string; toCurrency: string; amount: string; contextId?: string | null }) =>
-    request<{ transaction: Transaction }>('/api/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  execute: ({ contextId, ...data }: { type: OperationType; fromCurrency: string; toCurrency: string; amount: string; contextId?: string | null }) =>
+    // El backend no acepta contextId: null → solo lo mandamos si hay uno elegido
+    request<{ transaction: Transaction }>('/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify(contextId ? { ...data, contextId } : data),
+    }),
   transactions: (p: { contextId?: string; limit?: number; offset?: number } = {}) =>
     request<{ items: Transaction[]; total: number }>(`/api/transactions?${qs(p)}`),
 
@@ -130,7 +180,18 @@ export const api = {
     startDate?: string | null;
     endDate?: string | null;
     budget?: { currency: string; amount: string } | null;
-  }) => request<{ context: WalletContext }>('/api/contexts', { method: 'POST', body: JSON.stringify(data) }),
+  }) =>
+    // El backend no acepta null en los campos opcionales → los omitimos
+    request<{ context: WalletContext }>('/api/contexts', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: data.name,
+        type: data.type,
+        ...(data.startDate ? { startDate: data.startDate } : {}),
+        ...(data.endDate ? { endDate: data.endDate } : {}),
+        ...(data.budget ? { budget: data.budget } : {}),
+      }),
+    }),
   archiveContext: (id: string) => request<{ context: WalletContext }>(`/api/contexts/${id}/archive`, { method: 'PATCH' }),
 
   // Asistente

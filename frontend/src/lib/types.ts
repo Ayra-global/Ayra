@@ -43,7 +43,7 @@ export interface Quote {
   midRate: string;
   appliedRate: string;
   fee: string;
-  feeSide: 'from' | 'to';
+  feeSide: 'from' | 'to' | 'none';
   rateFetchedAt: string;
   rateStale: boolean;
 }
