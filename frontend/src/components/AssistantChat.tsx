@@ -29,7 +29,8 @@ export function AssistantChat() {
   async function send(text: string) {
     const msg = text.trim();
     if (!msg || sending) return;
-    const history = messages.slice(1); // sin el saludo inicial
+    // sin el saludo inicial; el backend acepta hasta 20 mensajes de 1000 caracteres
+const history = messages.slice(1).slice(-10).map((m) => ({ ...m, text: m.text.slice(0, 1000) }));
     setMessages((m) => [...m, { role: 'user', text: msg }]);
     setInput('');
     setSending(true);
