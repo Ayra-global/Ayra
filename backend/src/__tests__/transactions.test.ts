@@ -10,7 +10,9 @@ import type { PoolClient } from "pg";
 
 import { pool } from "../config/database";
 import { getQuote } from "../services/quote";
+import { sendTransactionEmail } from "../services/email";
 import { createTransaction } from "../services/transactions";
+
 
 vi.mock("../config/database", () => ({
     pool: {
@@ -23,6 +25,10 @@ vi.mock("../services/quote", () => ({
     getQuote: vi.fn(),
 }));
 
+vi.mock("../services/email", () => ({
+    sendTransactionEmail: vi.fn(),
+}));
+
 const mockedPoolQuery = vi.mocked(pool.query);
 
 const mockedPoolConnect = pool.connect as unknown as {
@@ -31,9 +37,138 @@ const mockedPoolConnect = pool.connect as unknown as {
 
 const mockedGetQuote = vi.mocked(getQuote);
 
+const mockedSendTransactionEmail =
+    vi.mocked(sendTransactionEmail);
+
 describe("createTransaction", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockedSendTransactionEmail.mockResolvedValue(true);
+    });
+
+    it("mantiene la transacción confirmada si falla el envío del email", async () => {
+        const clientQuery = vi.fn();
+
+        const client = {
+            query: clientQuery,
+            release: vi.fn(),
+        } as unknown as PoolClient;
+
+        mockedPoolConnect.mockResolvedValue(client);
+
+        mockedPoolQuery.mockResolvedValueOnce({
+            rows: [{ id: "wallet-1" }],
+        } as never);
+
+        mockedGetQuote.mockResolvedValue({
+            type: "exchange",
+            fromCurrency: "USD",
+            toCurrency: "EUR",
+            fromAmount: "100",
+            toAmount: "89.19",
+            midRate: "0.8919",
+            appliedRate: "0.8919",
+            fee: "0",
+            feeSide: "none",
+            rateFetchedAt: new Date(
+                "2026-10-06T20:00:00.000Z"
+            ),
+            rateStale: false,
+        });
+
+        clientQuery
+            .mockResolvedValueOnce({
+                rows: [],
+            })
+            .mockResolvedValueOnce({
+                rows: [
+                    {
+                        id: "balance-usd",
+                        currency_code: "USD",
+                        amount: "1000.00000000",
+                    },
+                    {
+                        id: "balance-eur",
+                        currency_code: "EUR",
+                        amount: "0.00000000",
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                rows: [],
+            })
+            .mockResolvedValueOnce({
+                rows: [],
+            })
+            .mockResolvedValueOnce({
+                rows: [{ id: "transaction-email-fail" }],
+            })
+            .mockResolvedValueOnce({
+                rows: [],
+            })
+            .mockResolvedValueOnce({
+                rows: [
+                    {
+                        id: "transaction-email-fail",
+                        type: "exchange",
+                        fromCurrency: "USD",
+                        toCurrency: "EUR",
+                        fromAmount: "100.00000000",
+                        toAmount: "89.19000000",
+                        rate: "0.89190000",
+                        midRate: "0.89190000",
+                        fee: "0.00000000",
+                        feeCurrency: null,
+                        contextId: null,
+                        contextName: null,
+                        createdAt: new Date(
+                            "2026-10-06T20:00:00.000Z"
+                        ),
+                    },
+                ],
+            });
+
+        mockedSendTransactionEmail.mockResolvedValue(false);
+
+        const result = await createTransaction(
+            "user-1",
+            {
+                type: "exchange",
+                fromCurrency: "USD",
+                toCurrency: "EUR",
+                amount: "100",
+            }
+        );
+
+        expect(result.id).toBe(
+            "transaction-email-fail"
+        );
+
+        expect(clientQuery).toHaveBeenCalledWith(
+            "COMMIT"
+        );
+
+        expect(clientQuery).not.toHaveBeenCalledWith(
+            "ROLLBACK"
+        );
+
+        expect(
+            mockedSendTransactionEmail
+        ).toHaveBeenCalledTimes(1);
+
+        expect(
+            mockedSendTransactionEmail
+        ).toHaveBeenCalledWith(
+            "user-1",
+            expect.objectContaining({
+                id: "transaction-email-fail",
+                type: "exchange",
+            })
+        );
+
+        expect(client.release).toHaveBeenCalledTimes(
+            1
+        );
     });
 
     it("crea un exchange y confirma la transacción", async () => {
@@ -169,6 +304,18 @@ describe("createTransaction", () => {
 
         expect(client.release).toHaveBeenCalledTimes(
             1
+        );
+
+        expect(mockedSendTransactionEmail).toHaveBeenCalledTimes(
+            1
+        );
+
+        expect(mockedSendTransactionEmail).toHaveBeenCalledWith(
+            "user-1",
+            expect.objectContaining({
+                id: "transaction-1",
+                type: "exchange",
+            })
         );
     });
 

@@ -8,6 +8,7 @@ import type {
     TransactionHistoryQuery,
     TransactionInput,
 } from "../schemas/transactions";
+import { sendTransactionEmail } from "./email";
 
 export interface TransactionResponse {
     id: string;
@@ -183,6 +184,8 @@ export async function createTransaction(
     });
 
     const client = await pool.connect();
+    let committed = false;
+    let createdTransaction: TransactionResponse;
 
     try {
         await client.query("BEGIN");
@@ -402,18 +405,29 @@ export async function createTransaction(
         }
 
         await client.query("COMMIT");
+        committed = true;
 
-        return await getTransactionById(
+        createdTransaction = await getTransactionById(
             client,
             inserted.id,
             walletId
         );
     } catch (error) {
-        await client.query("ROLLBACK");
+        if (!committed) {
+            await client.query("ROLLBACK");
+        }
+
         throw error;
     } finally {
         client.release();
     }
+
+    await sendTransactionEmail(
+        userId,
+        createdTransaction
+    );
+
+    return createdTransaction;
 }
 
 export async function getTransactionHistory(
@@ -488,4 +502,4 @@ export async function getTransactionHistory(
     };
 }
 
-export const getTransactions = getTransactionHistory;
+export const getTransactions = getTransactionHistory;
