@@ -22,6 +22,13 @@ export function dateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+export function dateOnly(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-AR', {
+    dateStyle: 'short',
+    timeZone: 'UTC',
+  });
+}
+
 export const TX_LABEL = { deposit: 'Depósito', buy: 'Compra', sell: 'Venta', exchange: 'Intercambio' } as const;
 
 export const CONTEXT_META = {

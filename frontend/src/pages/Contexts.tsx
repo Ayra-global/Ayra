@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { TransactionList } from '../components/TransactionList';
 import { api, ApiError } from '../lib/api';
-import { CONTEXT_META, money, percent } from '../lib/format';
+import { CONTEXT_META, dateOnly, money, percent } from '../lib/format';
 import type { ContextType, Transaction, WalletContext } from '../lib/types';
 
 export function ContextCard({ ctx, onClick, selected }: { ctx: WalletContext; onClick?: () => void; selected?: boolean }) {
@@ -11,7 +11,7 @@ export function ContextCard({ ctx, onClick, selected }: { ctx: WalletContext; on
     <button type="button" className={`context-card ctx-${ctx.type} ${selected ? 'selected' : ''}`} onClick={onClick}>
       <span className="ctx-icon">{meta.icon}</span>
       <b>{ctx.name}</b>
-      <span className="muted small">{meta.label}{ctx.endDate ? ` · hasta ${ctx.endDate}` : ''}</span>
+      <span className="muted small">{meta.label}{ctx.endDate ? ` · hasta ${dateOnly(ctx.endDate)}` : ''}</span>
       {ctx.budget ? (
         <>
           <span className="small">{money(ctx.budget.spent)} / {money(ctx.budget.amount, ctx.budget.currency)}</span>
