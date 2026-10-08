@@ -4,7 +4,10 @@ import {
     type QuoteResponse,
     type QuoteType,
 } from "./quote";
-import type { TransactionInput } from "../schemas/transactions";
+import type {
+    TransactionHistoryQuery,
+    TransactionInput,
+} from "../schemas/transactions";
 
 export interface TransactionResponse {
     id: string;
@@ -20,6 +23,13 @@ export interface TransactionResponse {
     contextId: string | null;
     contextName: string | null;
     createdAt: Date;
+}
+
+export interface TransactionHistoryResponse {
+    items: TransactionResponse[];
+    total: number;
+    limit: number;
+    offset: number;
 }
 
 interface WalletRow {
@@ -41,7 +51,7 @@ interface InsertedTransactionRow {
     id: string;
 }
 
-class TransactionError extends Error {
+export class TransactionError extends Error {
     constructor(
         public code: string,
         message: string
@@ -405,3 +415,77 @@ export async function createTransaction(
         client.release();
     }
 }
+
+export async function getTransactionHistory(
+    userId: string,
+    query: Partial<TransactionHistoryQuery> = {}
+): Promise<TransactionHistoryResponse> {
+    const walletId = await getWalletId(userId);
+
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+
+    let countSql = `
+        SELECT COUNT(*)::int AS total
+        FROM transactions t
+        WHERE t.wallet_id = $1
+    `;
+    const countParams: unknown[] = [walletId];
+
+    let itemsSql = `
+        SELECT
+            t.id,
+            t.type,
+            t.currency_from AS "fromCurrency",
+            t.currency_to AS "toCurrency",
+            t.amount_from AS "fromAmount",
+            t.amount_to AS "toAmount",
+            t.rate_used AS rate,
+            t.mid_rate AS "midRate",
+            t.fee,
+            t.fee_currency AS "feeCurrency",
+            t.context_id AS "contextId",
+            c.name AS "contextName",
+            t.created_at AS "createdAt"
+        FROM transactions t
+        LEFT JOIN contexts c
+            ON c.id = t.context_id
+        WHERE t.wallet_id = $1
+    `;
+    const itemsParams: unknown[] = [walletId];
+
+    if (query.contextId) {
+        countSql += ` AND t.context_id = $2`;
+        countParams.push(query.contextId);
+
+        itemsSql += ` AND t.context_id = $2`;
+        itemsParams.push(query.contextId);
+    }
+
+    itemsSql += `
+        ORDER BY t.created_at DESC, t.id DESC
+        LIMIT $${itemsParams.length + 1} OFFSET $${itemsParams.length + 2}
+    `;
+    itemsParams.push(limit, offset);
+
+    const countResult = await pool.query<{ total: number | string }>(
+        countSql,
+        countParams
+    );
+
+    const itemsResult = await pool.query<TransactionResponse>(
+        itemsSql,
+        itemsParams
+    );
+
+    const total = countResult.rows[0] ? Number(countResult.rows[0].total) : 0;
+
+    return {
+        items: itemsResult.rows,
+        total,
+        limit,
+        offset,
+    };
+}
+
+export const getTransactions = getTransactionHistory;

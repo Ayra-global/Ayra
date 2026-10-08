@@ -53,3 +53,38 @@ export const transactionSchema = z.object({
 });
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
+
+export const transactionHistoryQuerySchema = z.object({
+    contextId: z.preprocess(
+        (value) => (value === "" ? undefined : value),
+        z
+            .string()
+            .uuid("El contextId debe ser un UUID válido")
+            .optional()
+    ),
+
+    limit: z.preprocess(
+        (value) =>
+            value === "" || value === undefined ? undefined : value,
+        z.coerce
+            .number()
+            .int("El límite debe ser un número entero")
+            .min(1, "El límite mínimo es 1")
+            .max(100, "El límite máximo es 100")
+            .default(20)
+    ),
+
+    offset: z.preprocess(
+        (value) =>
+            value === "" || value === undefined ? undefined : value,
+        z.coerce
+            .number()
+            .int("El offset debe ser un número entero")
+            .min(0, "El offset no puede ser negativo")
+            .default(0)
+    ),
+});
+
+export type TransactionHistoryQuery = z.infer<
+    typeof transactionHistoryQuerySchema
+>;
